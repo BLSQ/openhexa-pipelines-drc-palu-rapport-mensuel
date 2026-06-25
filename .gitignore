@@ -5,6 +5,7 @@ __pycache__/
 
 .vscode/
 *.yaml
+__pycache__
 
 # C extensions
 *.so

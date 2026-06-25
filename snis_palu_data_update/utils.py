@@ -701,9 +701,9 @@ def get_file_from_dataset(dataset_id: str, filename: str) -> pd.DataFrame | gpd.
                 tfile.flush()
                 tfile_path = tfile.name
             if suffix == ".csv":
-                return pd.read_csv(tfile_path)
+                return pl.read_csv(tfile_path)
             if suffix == ".parquet":
-                return pd.read_parquet(tfile_path)
+                return pl.read_parquet(tfile_path)
             if suffix == ".json":
                 with Path(tfile_path).open(encoding="utf-8") as f:
                     return json.load(f)

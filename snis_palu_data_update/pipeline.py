@@ -1,18 +1,13 @@
 from datetime import datetime
 from pathlib import Path
 
-import pandas as pl
 from openhexa.sdk import current_run, pipeline, workspace
 from utils import (
-    configure_logging,
-    connect_to_dhis2,
     get_dataset_version_timestamp,
     get_file_from_dataset,
     get_matching_filenames_from_dataset,
-    load_configuration,
     read_json_file,
     save_json_file,
-    save_logs,
 )
 
 
@@ -30,7 +25,11 @@ def snis_palu_data_update():
     )
 
     if to_update:
-        load_data_from_dataset(dataset_id=source_dataset_id)
+        try:
+            load_data_from_dataset(dataset_id=source_dataset_id, output_path=pipeline_path / "data")
+        except Exception as e:
+            current_run.log_error(f"Error loading data from dataset: {e}")
+            raise
 
         update_last_run_timestamp(
             new_version_dt=new_version_dt,
@@ -57,9 +56,45 @@ def should_push_data(new_version_dt: datetime, timestamp_path: Path) -> bool:
     return not last_update_dt or new_version_dt > last_update_dt
 
 
-def load_data_from_dataset(dataset_id: str) -> None:
+def load_data_from_dataset(dataset_id: str, output_path: Path) -> None:
     """Load data from the dataset and save it to the local workspace."""
     current_run.log_info(f"loading data from dataset: {dataset_id}")
+    load_pyramid_metadata(dataset_id=dataset_id, output_path=output_path)
+    load_extract_files(dataset_id=dataset_id, output_path=output_path)
+    load_population_files(dataset_id=dataset_id, output_path=output_path)
+
+
+def load_pyramid_metadata(
+    dataset_id: str, output_path: Path, pyramid_fname: str = "snis_pyramid_metadata.parquet"
+) -> None:
+    """Load pyramid metadata from the dataset and save it to the local workspace."""
+    pyramid_data = get_file_from_dataset(dataset_id=dataset_id, filename=pyramid_fname)
+    pyramid_path = output_path / "pyramid"
+    pyramid_path.mkdir(parents=True, exist_ok=True)
+    pyramid_data.write_parquet(pyramid_path / pyramid_fname)
+    current_run.log_info(f"Saved pyramid file: {pyramid_fname} to {pyramid_path}")
+
+
+def load_extract_files(dataset_id: str, output_path: Path, pattern: str = "palu_extract_*.parquet") -> None:
+    """Load extract files from the dataset and save them to the local workspace."""
+    extract_fnames = get_matching_filenames_from_dataset(dataset_id=dataset_id, pattern=pattern)
+    extracts_path = output_path / "extracts"
+    extracts_path.mkdir(parents=True, exist_ok=True)
+    for fname in extract_fnames:
+        extract_data = get_file_from_dataset(dataset_id=dataset_id, filename=fname)
+        extract_data.write_parquet(extracts_path / fname)
+        current_run.log_info(f"Saved extract file: {fname} to {extracts_path}")
+
+
+def load_population_files(dataset_id: str, output_path: Path, pattern: str = "snis_population_*.parquet") -> None:
+    """Load population files from the dataset and save them to the local workspace."""
+    pop_fnames = get_matching_filenames_from_dataset(dataset_id=dataset_id, pattern=pattern)
+    pop_path = output_path / "population"
+    pop_path.mkdir(parents=True, exist_ok=True)
+    for fname in pop_fnames:
+        pop_data = get_file_from_dataset(dataset_id=dataset_id, filename=fname)
+        pop_data.write_parquet(pop_path / fname)
+        current_run.log_info(f"Saved population file: {fname} to {fname}")
 
 
 def update_last_run_timestamp(new_version_dt: datetime, timestamp_filename: Path) -> None:
